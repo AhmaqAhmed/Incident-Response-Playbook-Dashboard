@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IR Playbook Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  font-weight: bold;
+  --bg: #131330; --surface: #010029; --surface-2: #18172B;
+  --border: #0D0D14; --border-hover: #333333;
+  --text: #e9e4d8; --text-muted: #6b6b6b; --text-dim: #5b5b5b;
+  --critical: #e24b4a; --critical-bg: #1a0808; --critical-border: #3d1010;
+  --high: #ef9f27; --high-bg: #1a1100; --high-border: #3d2800;
+  --medium: #378add; --medium-bg: #071520; --medium-border: #0d2d40;
+  --low: #1d9e75; --low-bg: #071510; --low-border: #0d3020;
+  --open: #e24b4a; --investigating: #ef9f27; --contained: #378add; --resolved: #1d9e75;
+  --font: 'JetBrains Mono', monospace; --radius: 6px; --radius-lg: 10px;
+}
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.6; min-height: 100vh; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; height: 52px; border-bottom: 0.5px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 10; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-logo { font-size: 11px; font-weight: 600; letter-spacing: 0.15em; background: var(--text); color: var(--bg); padding: 3px 7px; border-radius: 4px; }
+.topbar-title { font-size: 13px; color: var(--text-muted); }
+.topbar-status { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--resolved); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--resolved); }
+.main-content { max-width: 1100px; margin: 0 auto; padding: 2rem 2rem 4rem; }
+.page { display: none; }
+.page.active { display: block; }
+.page-header { margin-bottom: 1.75rem; }
+.page-title { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 4px; }
+.page-sub { font-size: 11px; color: var(--text-muted); letter-spacing: 0.04em; }
+.metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.75rem; }
+.metric-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
+.metric-label { font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+.metric-value { font-size: 26px; font-weight: 500; color: var(--text); }
+.metric-value.critical { color: var(--critical); }
+.metric-value.open { color: var(--medium); }
+.metric-value.resolved { color: var(--resolved); }
+.filter-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.filter-form { display: flex; align-items: center; gap: 10px; }
+.filter-label { font-size: 11px; color: var(--text-muted); }
+.filter-select { font-family: var(--font); font-size: 11px; background: var(--surface); color: var(--text); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 5px 10px; cursor: pointer; outline: none; }
+.filter-select:hover { border-color: var(--border-hover); }
+.filter-count { font-size: 11px; color: var(--text-dim); }
+.table-wrap { border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.alert-table { width: 100%; border-collapse: collapse; }
+.alert-table thead tr { border-bottom: 0.5px solid var(--border); }
+.alert-table th { font-size: 10px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 400; text-align: left; padding: 10px 14px; background: var(--surface); }
+.alert-table td { padding: 12px 14px; border-top: 0.5px solid var(--border); vertical-align: middle; }
+.alert-row { cursor: pointer; }
+.alert-row:hover td { background: var(--surface-2); }
+.alert-name { font-size: 13px; color: var(--text); }
+.alert-ip { font-size: 12px; color: var(--text-muted); }
+.alert-time { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.badge { display: inline-block; font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; }
+.badge.critical { background: var(--critical-bg); color: var(--critical); border: 0.5px solid var(--critical-border); }
+.badge.high { background: var(--high-bg); color: var(--high); border: 0.5px solid var(--high-border); }
+.badge.medium { background: var(--medium-bg); color: var(--medium); border: 0.5px solid var(--medium-border); }
+.badge.low { background: var(--low-bg); color: var(--low); border: 0.5px solid var(--low-border); }
+.badge-lg { font-size: 11px; padding: 4px 12px; }
+.status-indicator { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.status-pip { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.status-indicator.open .status-pip { background: var(--open); }
+.status-indicator.investigating .status-pip { background: var(--investigating); }
+.status-indicator.contained .status-pip { background: var(--contained); }
+.status-indicator.resolved .status-pip { background: var(--resolved); }
+.status-indicator.open { color: var(--open); }
+.status-indicator.investigating { color: var(--investigating); }
+.status-indicator.contained { color: var(--contained); }
+.status-indicator.resolved { color: var(--resolved); }
+.view-link { font-size: 11px; color: var(--text-muted); text-decoration: none; border: 0.5px solid var(--border); border-radius: 4px; padding: 3px 10px; white-space: nowrap; cursor: pointer; background: none; font-family: var(--font); transition: color 0.15s, border-color 0.15s; }
+.view-link:hover { color: var(--text); border-color: var(--border-hover); }
+.detail-back { margin-bottom: 1.5rem; }
+.back-link { font-size: 12px; color: var(--text-muted); text-decoration: none; cursor: pointer; background: none; border: none; font-family: var(--font); }
+.back-link:hover { color: var(--text); }
+.detail-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; gap: 1rem; }
+.detail-header-left { display: flex; flex-direction: column; gap: 8px; }
+.detail-title { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
+.detail-id { font-size: 11px; color: var(--text-muted); }
+.detail-status-block { text-align: right; flex-shrink: 0; }
+.detail-meta-label { font-size: 10px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+.detail-meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 2rem; }
+.meta-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
+.meta-value { font-size: 14px; font-weight: 500; color: var(--text); }
+.playbook-section { margin-bottom: 2rem; }
+.playbook-header { margin-bottom: 1.25rem; }
+.playbook-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+.playbook-sub { font-size: 11px; color: var(--text-muted); }
+.playbook-steps { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.playbook-step { display: flex; align-items: flex-start; gap: 14px; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; transition: border-color 0.15s; }
+.playbook-step:hover { border-color: var(--border-hover); }
+.step-number { font-size: 10px; font-weight: 600; color: var(--text-muted); background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 4px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.step-content { font-size: 13px; color: var(--text); line-height: 1.5; }
+.notes-section { border-top: 0.5px solid var(--border); padding-top: 1.5rem; }
+.notes-title { font-size: 15px; font-weight: 500; margin-bottom: 10px; }
+.notes-textarea { width: 100%; min-height: 130px; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); color: var(--text); font-family: var(--font); font-size: 12px; padding: 12px 14px; resize: vertical; outline: none; transition: border-color 0.15s; }
+.notes-textarea:focus { border-color: var(--border-hover); }
+.notes-textarea::placeholder { color: var(--text-dim); }
+.notes-hint { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
+@media (max-width: 768px) {
+  .main-content { padding: 1.25rem 1rem 3rem; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .detail-meta-grid { grid-template-columns: 1fr 1fr; }
+  .detail-header { flex-direction: column; }
+  .topbar { padding: 0 1rem; }
+}
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">IR</span>
+    <span class="topbar-title">Playbook Dashboard</span>
+  </div>
+  <div class="topbar-status">
+    <span class="status-dot"></span>
+    System nominal
+  </div>
+</nav>
+
+<main class="main-content">
+
+  <!-- DASHBOARD PAGE -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header">
+      <h1 class="page-title">Active Incidents</h1>
+      <p class="page-sub">Security Operations Center — Live Feed</p>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Total Alerts</div>
+        <div class="metric-value">{{ summary.total }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Critical</div>
+        <div class="metric-value critical">{{ summary.critical }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Open</div>
+        <div class="metric-value open">{{ summary.open }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Resolved</div>
+        <div class="metric-value resolved">{{ summary.resolved }}</div>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <div class="filter-form">
+        <label class="filter-label" for="severity-filter">Filter by severity</label>
+        <select id="severity-filter" class="filter-select" onchange="filterAlerts(this.value)">
+          <option value="all" {% if severity_filter == 'all' %}selected{% endif %}>All</option>
+          <option value="critical" {% if severity_filter == 'critical' %}selected{% endif %}>Critical</option>
+          <option value="high" {% if severity_filter == 'high' %}selected{% endif %}>High</option>
+          <option value="medium" {% if severity_filter == 'medium' %}selected{% endif %}>Medium</option>
+          <option value="low" {% if severity_filter == 'low' %}selected{% endif %}>Low</option>
+        </select>
+      </div>
+      <span class="filter-count" id="alert-count">{{ summary.total }} alerts</span>
+    </div>
+
+    <div class="table-wrap">
+      <table class="alert-table">
+        <thead>
+          <tr>
+            <th>Alert</th>
+            <th>Severity</th>
+            <th>Source IP</th>
+            <th>Status</th>
+            <th>Detected</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="alert-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- DETAIL PAGE -->
+  <div class="page" id="page-detail">
+    <div class="detail-back">
+      <button class="back-link" onclick="showDashboard()">← Back to dashboard</button>
+    </div>
+
+    <div class="detail-header">
+      <div class="detail-header-left">
+        <span class="badge badge-lg" id="d-badge"></span>
+        <h1 class="detail-title" id="d-title"></h1>
+        <p class="detail-id" id="d-id"></p>
+      </div>
+      <div class="detail-status-block">
+        <div class="detail-meta-label">Status</div>
+        <span class="status-indicator" id="d-status"></span>
+      </div>
+    </div>
+
+    <div class="detail-meta-grid">
+      <div class="meta-card">
+        <div class="detail-meta-label">Source IP</div>
+        <div class="meta-value" id="d-ip"></div>
+      </div>
+      <div class="meta-card">
+        <div class="detail-meta-label">Severity</div>
+        <div class="meta-value" id="d-severity"></div>
+      </div>
+      <div class="meta-card">
+        <div class="detail-meta-label">Detected</div>
+        <div class="meta-value" id="d-time"></div>
+      </div>
+    </div>
+
+    <div class="playbook-section">
+      <div class="playbook-header">
+        <h2 class="playbook-title">Response Playbook</h2>
+        <p class="playbook-sub">Follow these steps in order to contain and resolve this incident.</p>
+      </div>
+      <ol class="playbook-steps" id="d-steps"></ol>
+    </div>
+
+    <div class="notes-section">
+      <h2 class="notes-title">Evidence Notes</h2>
+      <textarea class="notes-textarea" placeholder="Document findings, actions taken, and observations here..."></textarea>
+      <p class="notes-hint">Notes are not saved — copy to your incident log before leaving.</p>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const alerts = {{ alerts_json | safe }};
+
+const playbooks = {
+  "Ransomware signature detected": [
+    "Immediately isolate the affected endpoint from the network",
+    "Identify the ransomware variant using AV or threat intel feeds",
+    "Preserve forensic evidence — capture memory dump and disk image",
+    "Notify security lead and initiate incident escalation",
+    "Determine blast radius — identify other potentially infected hosts",
+    "Restore affected systems from clean, verified backups",
+    "Patch the initial attack vector before reconnecting to network",
+    "Conduct post-incident review and update playbook",
+  ],
+  "Unusual data exfiltration": [
+    "Identify the user account and endpoint involved",
+    "Block outbound traffic from the source IP immediately",
+    "Determine what data was accessed and volume transferred",
+    "Preserve logs from DLP, proxy, and endpoint telemetry",
+    "Suspend the user account pending investigation",
+    "Notify legal, compliance, and data protection officer",
+    "Assess whether breach notification obligations apply",
+    "Review and tighten DLP policies post-incident",
+  ],
+  "Phishing email detected": [
+    "Identify all recipients of the phishing email",
+    "Pull and block the sender domain and IP at the email gateway",
+    "Check if any recipient clicked links or opened attachments",
+    "Reset credentials for any accounts that interacted with the email",
+    "Scan endpoints of affected users for malware indicators",
+    "Review mailbox activity for forwarding rules or suspicious logins",
+    "Send user awareness notification across the organisation",
+  ],
+  "Brute force login attempt": [
+    "Identify the targeted account and source IP address",
+    "Lock the account if the login threshold has been exceeded",
+    "Block the source IP at the firewall or WAF",
+    "Review authentication logs for any successful logins from that IP",
+    "Enable or enforce MFA on the targeted account",
+    "Check for lateral movement if account was compromised",
+    "Tune IDS/IPS rules to alert on similar patterns going forward",
+  ],
+  "DDoS traffic spike": [
+    "Confirm the spike is malicious and not a legitimate traffic surge",
+    "Enable rate limiting at the edge or CDN layer",
+    "Contact upstream ISP or DDoS mitigation provider for scrubbing",
+    "Identify source IPs or ASNs and apply null routing where possible",
+    "Monitor service availability and escalate if SLAs are breached",
+    "Capture traffic samples for post-incident analysis",
+    "Review and update DDoS response runbooks",
+  ],
+  "Malware signature detected": [
+    "Isolate the affected host from the network immediately",
+    "Run a full antivirus and EDR scan on the endpoint",
+    "Collect forensic artefacts — process list, network connections, prefetch files",
+    "Identify the malware family and check for known indicators of compromise",
+    "Check for persistence mechanisms (registry keys, scheduled tasks, startup items)",
+    "Determine if the malware has spread to other hosts",
+    "Restore from a known-good backup after full remediation",
+  ],
+  "Unauthorized access attempt": [
+    "Review access logs to determine what resources were targeted",
+    "Verify if the attempt succeeded or was blocked",
+    "Identify the source IP and correlate with threat intelligence",
+    "Check for other attempts from the same IP or user agent",
+    "Strengthen access controls or MFA on targeted resources",
+    "Document findings and close the incident with a timeline",
+  ],
+};
+
+function renderTable(filter) {
+  const tbody = document.getElementById('alert-tbody');
+  const countEl = document.getElementById('alert-count');
+  const filtered = filter === 'all' ? alerts : alerts.filter(a => a.severity === filter);
+  countEl.textContent = filtered.length + ' alert' + (filtered.length !== 1 ? 's' : '');
+  tbody.innerHTML = filtered.map(a => `
+    <tr class="alert-row" onclick="showDetail(${a.id})">
+      <td class="alert-name">${a.alert}</td>
+      <td><span class="badge ${a.severity}">${a.severity}</span></td>
+      <td class="alert-ip">${a.source_ip}</td>
+      <td><span class="status-indicator ${a.status}"><span class="status-pip"></span>${cap(a.status)}</span></td>
+      <td class="alert-time">${a.timestamp}</td>
+      <td><button class="view-link" onclick="event.stopPropagation(); showDetail(${a.id})">View →</button></td>
+    </tr>
+  `).join('');
+}
+
+function filterAlerts(val) { renderTable(val); }
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function showDetail(id) {
+  const a = alerts.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('d-badge').className = `badge badge-lg ${a.severity}`;
+  document.getElementById('d-badge').textContent = a.severity;
+  document.getElementById('d-title').textContent = a.alert;
+  document.getElementById('d-id').textContent = `Incident #${a.id} · ${a.timestamp}`;
+  document.getElementById('d-ip').textContent = a.source_ip;
+  document.getElementById('d-severity').textContent = cap(a.severity);
+  document.getElementById('d-time').textContent = a.timestamp;
+  const statusEl = document.getElementById('d-status');
+  statusEl.className = `status-indicator ${a.status}`;
+  statusEl.innerHTML = `<span class="status-pip"></span>${cap(a.status)}`;
+  const steps = playbooks[a.alert] || [];
+  document.getElementById('d-steps').innerHTML = steps.map((s, i) => `
+    <li class="playbook-step">
+      <div class="step-number">${i + 1}</div>
+      <div class="step-content">${s}</div>
+    </li>
+  `).join('');
+  document.getElementById('page-dashboard').classList.remove('active');
+  document.getElementById('page-detail').classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function showDashboard() {
+  document.getElementById('page-detail').classList.remove('active');
+  document.getElementById('page-dashboard').classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+renderTable('all');
+</script>
+</body>
+</html>
